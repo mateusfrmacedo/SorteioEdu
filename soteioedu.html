@@ -1,0 +1,486 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorteio Encontro dos Profissionais da Educação</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', 'Segoe UI', Arial, sans-serif;
+            max-width: auto;
+            padding: auto;
+            text-align: center;
+            background: transparent; 
+            min-height: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow-x: hidden;
+            /* Adiciona o cursor padrão ao corpo, mas a sobreposição terá o cursor de clique */
+            cursor: default; 
+        }
+        h1 {
+            color: #036613;
+            font-size: 3.2em;
+            font-weight: 800;
+            margin-bottom: 0px;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.529);
+        }
+        form {
+            background-color: #ffffff; 
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.591);
+            margin-bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+        label {
+            display: block;
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #333;
+            margin: 15px 0 8px;
+        }
+        input[type="file"] {
+            margin: 15px auto;
+            padding: 10px;
+            width: 80%;
+            max-width: 400px;
+            box-sizing: border-box;
+            font-size: 1.1em;
+            font-family: 'Poppins', sans-serif;
+            display: block;
+        }
+        input[type="checkbox"] {
+            margin-right: 10px;
+            transform: scale(1.2);
+        }
+        .result {
+            font-size: 2.2em;
+            font-weight: 600;
+            color: #00a61c;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.534);
+            margin: 30px 0;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            width: 100%;
+        }
+        .result:empty {
+            display: none;
+        }
+        .countdown-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000000eb;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            display: none;
+            overflow: hidden;
+            cursor: pointer; /* Indica que é clicável */
+        }
+        .countdown-overlay.show {
+            display: flex;
+        }
+        /* Contagem Regressiva - Grande e Vibrante */
+        .countdown {
+            font-size: 15em;
+            font-weight: 900;
+            color: #34c759;
+            text-shadow: 0 0 40px #28a745, 0 0 10px #218838;
+            animation: pulse-vibrant 0.4s ease-in-out infinite alternate;
+        }
+        .countdown-overlay.sorteado {
+            animation: pop 0.9s ease-in-out;
+        }
+        .countdown-overlay.sorteado .countdown-text {
+            font-size: 4em;
+            color: #34c759;
+            margin-bottom: 30px;
+            font-weight: 800;
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.499);
+        }
+        .countdown-overlay.sorteado .name-text {
+            font-size: 7em;
+            font-weight: 900;
+            background: linear-gradient(to right, #28a745, #5ce67a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 50px rgba(40, 167, 69, 0.8);
+        }
+        .drawn-names {
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.471);
+            margin-top: 20px;
+            width: 100%;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 1.1em;
+            font-weight: 400;
+            color: #090909;
+        }
+        .drawn-names h3 {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #03a905;
+            margin: 0 0 10px;
+        }
+        .drawn-names ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .drawn-names li {
+            margin: 5px 0;
+        }
+        button {
+            padding: 20px 40px;
+            margin: 15px;
+            font-size: 1.4em;
+            font-weight: 600;
+            cursor: pointer;
+            background: linear-gradient(to right, #28a745, #34c759);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.5);
+            font-family: 'Poppins', sans-serif;
+        }
+        button:hover:not(:disabled) {
+            background: linear-gradient(to right, #218838, #2db44a);
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.7);
+        }
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        /* FOGOS DE ARTIFICÍCIO EM CSS (Estrelas/Partículas) */
+        #fireworks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Crucial: garante que os cliques passem para o overlay */
+            mix-blend-mode: screen;
+        }
+        .star {
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            background-color: #ffeb3b;
+            border-radius: 50%;
+            opacity: 0;
+            animation: fire-burst 2.5s ease-out forwards; 
+        }
+
+        @keyframes pulse-vibrant {
+            0% { transform: scale(1); text-shadow: 0 0 20px #28a745; }
+            50% { transform: scale(1.15); text-shadow: 0 0 50px #34c759, 0 0 20px #218838; }
+            100% { transform: scale(1); text-shadow: 0 0 20px #28a745; }
+        }
+        @keyframes pop {
+            0% { transform: scale(0.7); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes fire-burst {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            50% { opacity: 1; }
+            100% { transform: translate(var(--x), var(--y)) scale(0.1); opacity: 0; }
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 20px; }
+            h1 { font-size: 2.5em; }
+            form { padding: 25px; }
+            label { font-size: 1.1em; }
+            input[type="file"] { width: 100%; font-size: 1em; }
+            button { padding: 15px 25px; font-size: 1.2em; }
+            .result { font-size: 1.8em; padding: 20px; }
+            .countdown { font-size: 8em; }
+            .countdown-overlay.sorteado .countdown-text { font-size: 2.5em; }
+            .countdown-overlay.sorteado .name-text { font-size: 4em; }
+            .drawn-names { font-size: 0.9em; max-height: 200px; }
+            .drawn-names h3 { font-size: 1.1em; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Sorteio</h1>
+    <form id="uploadForm">
+        <label for="fileInput">Envie a lista de nomes (Excel ou CSV):</label>
+        <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" required>
+        <label>
+            <input type="checkbox" id="noRepeat"> Não sortear nomes já sorteados
+        </label>
+        <button type="button" id="startDraw" disabled>Iniciar Sorteio</button>
+    </form>
+    <div id="result" class="result"></div>
+    <div id="drawnNames" class="drawn-names">
+        <h3>Nomes Sorteados</h3>
+        <ul id="drawnNamesList"></ul>
+    </div>
+    <div id="countdownOverlay" class="countdown-overlay">
+        <div id="fireworks"></div> 
+        <div id="countdownText" class="countdown-text"></div>
+        <div id="nameText" class="name-text"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        let names = [];
+        let drawnNames = [];
+        let fireworksInterval = null; 
+
+        document.getElementById('fileInput').addEventListener('change', handleFile);
+        document.getElementById('startDraw').addEventListener('click', startDraw);
+        
+        // NOVO: Adiciona o event listener para fechar a sobreposição em qualquer clique
+        document.getElementById('countdownOverlay').addEventListener('click', endRevealProcess); 
+        
+        // LÓGICA DE FECHAMENTO (NOVA)
+        function endRevealProcess() {
+            const overlay = document.getElementById('countdownOverlay');
+            
+            // Só executa se o overlay estiver visível (e o sorteio não estiver na fase de contagem)
+            if (overlay.classList.contains('show') && overlay.classList.contains('sorteado')) {
+                
+                // 1. Para as ondas de explosão
+                if (fireworksInterval) {
+                    clearInterval(fireworksInterval);
+                    fireworksInterval = null; // Reseta o controlador
+                }
+                
+                // 2. Esconde a sobreposição e limpa os fogos
+                overlay.classList.remove('show');
+                document.getElementById('fireworks').innerHTML = '';
+                
+                // 3. Reativa o botão principal
+                document.getElementById('startDraw').disabled = false;
+            }
+        }
+
+
+        /**
+         * Cria as partículas de "fogos de artifício" em uma posição específica.
+         * ... (função createFireworks permanece igual) ...
+         */
+        function createFireworks(left, top, count) {
+            const fireworksContainer = document.getElementById('fireworks');
+            const colors = ['#ffeb3b', '#e91e63', '#2196f3', '#00bcd4', '#4caf50', '#ffffff', '#ff9800'];
+            
+            for (let i = 0; i < count; i++) {
+                const star = document.createElement('div');
+                star.classList.add('star');
+                
+                star.style.left = left;
+                star.style.top = top;
+                star.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                star.style.width = star.style.height = `${Math.random() * 5 + 3}px`;
+                
+                const distanceX = Math.random() * 350 * (Math.random() > 0.5 ? 1 : -1);
+                const distanceY = Math.random() * 350 * (Math.random() > 0.5 ? 1 : -1);
+                
+                star.style.setProperty('--x', `${distanceX}px`);
+                star.style.setProperty('--y', `${distanceY}px`);
+                
+                star.style.animationDelay = `${Math.random() * 0.5}s`;
+
+                fireworksContainer.appendChild(star);
+            }
+            
+            // Limpeza de DOM para performance (mantida)
+            setTimeout(() => {
+                const fireworksContainer = document.getElementById('fireworks');
+                const allStars = fireworksContainer.querySelectorAll('.star');
+                const starsToRemoveCount = allStars.length - 1000; 
+                for (let i = 0; i < starsToRemoveCount; i++) {
+                    if (fireworksContainer.firstChild) {
+                         fireworksContainer.removeChild(fireworksContainer.firstChild);
+                    }
+                }
+            }, 3000); 
+        }
+
+        // ... (handleFile e updateDrawnNames permanecem iguais) ...
+
+        function handleFile(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            
+            names = [];
+            drawnNames = [];
+            document.getElementById('result').textContent = '';
+            document.getElementById('startDraw').disabled = true;
+            updateDrawnNames();
+
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                
+                names = rows.map(row => row[0]).filter(name => name && typeof name === 'string');
+                
+                if (names.length > 0) {
+                    document.getElementById('result').textContent = `Lista carregada com sucesso! (${names.length} nomes encontrados.)`;
+                    document.getElementById('startDraw').disabled = false;
+                } else {
+                    document.getElementById('result').textContent = 'Nenhum nome encontrado na planilha.';
+                    document.getElementById('startDraw').disabled = true;
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function updateDrawnNames() {
+            const drawnNamesList = document.getElementById('drawnNamesList');
+            drawnNamesList.innerHTML = '';
+            if (drawnNames.length === 0) {
+                const li = document.createElement('li');
+                li.textContent = 'Nenhum nome sorteado ainda';
+                drawnNamesList.appendChild(li);
+            } else {
+                drawnNames.forEach(name => {
+                    const li = document.createElement('li');
+                    li.textContent = name;
+                    drawnNamesList.appendChild(li);
+                });
+            }
+        }
+        
+        function startDraw() {
+            const noRepeat = document.getElementById('noRepeat').checked;
+            let availableNames = noRepeat ? names.filter(name => !drawnNames.includes(name)) : names;
+
+            if (names.length === 0) {
+                 document.getElementById('result').textContent = 'Por favor, carregue uma lista de nomes primeiro.';
+                 return;
+            }
+            
+            if (availableNames.length === 0) {
+                document.getElementById('result').textContent = 'Nenhum nome disponível para sorteio! (Todos já foram sorteados, ou a lista está vazia)';
+                document.getElementById('result').classList.remove('sorteado');
+                document.getElementById('countdownOverlay').classList.remove('show');
+                return;
+            }
+            
+            // Certifica-se de que nenhum loop de fogos esteja rodando
+            if (fireworksInterval) {
+                clearInterval(fireworksInterval);
+            }
+
+            // Desativa o botão e limpa o container de fogos
+            document.getElementById('startDraw').disabled = true;
+            document.getElementById('fireworks').innerHTML = ''; 
+            
+            const overlay = document.getElementById('countdownOverlay');
+            const countdownText = document.getElementById('countdownText');
+            const nameText = document.getElementById('nameText');
+            overlay.classList.add('show');
+            overlay.classList.remove('sorteado');
+            countdownText.classList.add('countdown');
+            countdownText.textContent = '';
+            nameText.textContent = '';
+
+            // Inicia contagem regressiva
+            let countdown = 5;
+            countdownText.textContent = countdown;
+
+            const interval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    countdownText.textContent = countdown;
+                } else {
+                    clearInterval(interval);
+                    
+                    // Sorteia o nome
+                    const randomIndex = Math.floor(Math.random() * availableNames.length);
+                    const selectedName = availableNames[randomIndex];
+                    
+                    // ACIONA OS EFEITOS DE REVELAÇÃO (Agora só será fechado pelo clique)
+                    countdownText.textContent = 'PARABÉNS!'; 
+                    nameText.textContent = selectedName;
+                    overlay.classList.add('sorteado');
+                    countdownText.classList.remove('countdown');
+                    
+                    // LÓGICA DE EXPLOSÃO MÚLTIPLA: Dispara a cada 0.4s (AGORA INFINITO)
+                    const particleCountPerWave = 100;
+                    
+                    fireworksInterval = setInterval(() => {
+                        // Gera uma posição inicial aleatória
+                        const randomLeft = `${Math.random() * 60 + 20}%`;
+                        const randomTop = `${Math.random() * 60 + 20}%`;
+                        
+                        createFireworks(randomLeft, randomTop, particleCountPerWave);
+                    }, 400); 
+                    
+                    // Atualiza o resultado fora da sobreposição
+                    document.getElementById('result').textContent = `🎉 ${selectedName} 🎉`;
+                    document.getElementById('result').classList.add('sorteado');
+
+                    // Atualiza a lista de nomes sorteados
+                    drawnNames.push(selectedName);
+                    updateDrawnNames();
+
+                    // REMOVIDO: O Timeout para fechar automaticamente. O clique fará isso agora.
+                }
+            }, 1000); 
+        }
+    </script>
+</body>
+</html>
